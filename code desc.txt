@@ -1,0 +1,85 @@
+Let's go through the code step by step to explain its functionality and how it creates a web API for Fraud Detection and Prevention using FastAPI.
+
+```python
+# Import necessary modules and classes from FastAPI, Pydantic, and other libraries
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+import joblib
+```
+
+The above section imports the required libraries and modules. FastAPI is used to create the web API, Pydantic is used for data validation, and other libraries like pandas and scikit-learn are used for data preprocessing and machine learning tasks.
+
+```python
+# Create an instance of the FastAPI class
+app = FastAPI()
+```
+
+Here, an instance of the `FastAPI` class is created to set up the application.
+
+```python
+# Define a Pydantic model to represent transaction data sent to the /predict/ endpoint
+class TransactionData(BaseModel):
+    amount: float
+    merchant: str
+    location: str
+```
+
+A Pydantic model named `TransactionData` is defined. This model is used to validate and parse the input data received at the `/predict/` endpoint.
+
+```python
+# Define an event handler that loads the trained model and scaler when the application starts
+@app.on_event("startup")
+async def load_model():
+    global model, scaler
+    model = joblib.load("fraud_model.pkl")
+    scaler = joblib.load("scaler.pkl")
+```
+
+The `load_model` event handler is executed when the application starts. It loads the trained machine learning model (`fraud_model.pkl`) and scaler (`scaler.pkl`) into memory. These objects are used for predicting fraudulent transactions.
+
+```python
+# Define an endpoint to predict whether a transaction is fraudulent or not
+@app.post("/predict/")
+async def predict_fraud(transaction: TransactionData):
+    try:
+        # Create a DataFrame with the transaction data
+        features = pd.DataFrame({
+            "amount": [transaction.amount],
+            "merchant": [transaction.merchant],
+            "location": [transaction.location]
+        })
+
+        # Preprocess data and scale features using the loaded scaler
+        scaled_features = scaler.transform(features)
+
+        # Make a prediction using the loaded model
+        prediction = model.predict(scaled_features)
+        
+        # Return the prediction result
+        if prediction[0] == 1:
+            return {"fraudulent": True}
+        else:
+            return {"fraudulent": False}
+    except Exception:
+        # Handle prediction failures by raising an HTTPException with a 500 status code
+        raise HTTPException(status_code=500, detail="Prediction failed")
+```
+
+The `/predict/` endpoint is defined using the `@app.post()` decorator. When a POST request is made to this endpoint with transaction data in the request body, the `predict_fraud` function is called.
+
+Inside the `predict_fraud` function, the transaction data is preprocessed and scaled using the previously loaded scaler. Then, the trained model is used to predict whether the transaction is fraudulent or not. The prediction result is returned in the response.
+
+If any exceptions occur during prediction, an `HTTPException` with a 500 status code is raised to handle prediction failures.
+
+```python
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+The script checks if it's being run directly (not imported as a module). If so, it uses the `uvicorn` library to run the FastAPI application on host "0.0.0.0" and port 8000.
+
+This code creates a FastAPI web API that can predict whether a given transaction is fraudulent or not. The trained machine learning model and scaler are loaded when the application starts, and incoming transaction data is processed, scaled, and passed through the model for prediction. If you run this script, you'll have a functioning web API for fraud detection and prevention.
